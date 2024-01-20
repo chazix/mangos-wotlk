@@ -99,7 +99,6 @@ PlayerbotAI::PlayerbotAI(PlayerbotMgr &mgr, Player* const bot, bool debugWhisper
 {
     // set bot state
     m_botState = BOTSTATE_LOADING;
-    m_questRewardOption = QUEST_REWARD_CONFIG_DRIVEN;
 
     // reset some pointers
     m_targetChanged = false;
