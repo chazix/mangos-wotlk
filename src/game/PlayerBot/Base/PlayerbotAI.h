@@ -1670,6 +1670,14 @@ class PlayerbotAI
             CANT_USE_TOO_FAR            = 0x03
         };
 
+        enum QuestRewardOptionType
+        {
+          QUEST_REWARD_CONFIG_DRIVEN  = 0x00,
+          QUEST_REWARD_OPTION_AUTO    = 0x01,
+          QUEST_REWARD_OPTION_LIST    = 0x02,
+          QUEST_REWARD_OPTION_ASK     = 0x03
+        };
+
         typedef std::pair<enum TaskFlags, uint32> taskPair;
         typedef std::list<taskPair> BotTaskList;
         typedef std::list<enum NPCFlags> BotNPCList;
@@ -1941,6 +1949,9 @@ class PlayerbotAI
         void GetTaxi(ObjectGuid guid, BotTaxiNode& nodes);
         void BeingRolledOn(ObjectGuid target) { m_being_rolled_on.push_back(target); };
 
+        QuestRewardOptionType GetQuestRewardOptionType() { return m_questRewardOption; };
+        void SetQuestRewardOptionType(QuestRewardOptionType type) { m_questRewardOption = type; };
+
         bool HasCollectFlag(uint8 flag) { return (m_collectionFlags & flag) ? true : false; }
         void SetCollectFlag(uint8 flag)
         {
@@ -2094,6 +2105,7 @@ class PlayerbotAI
 
         // defines the state of behaviour of the bot
         BotState m_botState;
+        QuestRewardOptionType m_questRewardOption;
 
         // list of items, creatures or gameobjects needed to fullfill quests
         BotNeedItem m_needItemList;
