@@ -59,7 +59,6 @@
 // Playerbots
 #ifdef ENABLE_PLAYERBOTS
 #include "playerbot.h"
-#include "GuildTaskMgr.h"
 #endif
 
 #include <math.h>
@@ -1413,12 +1412,6 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
     if (responsiblePlayer)                                  // killedby Player, inform BG
         if (BattleGround* bg = responsiblePlayer->GetBattleGround())
             bg->HandleKillUnit(victim, responsiblePlayer);
-
-#ifdef ENABLE_PLAYERBOTS
-    // Guild Task check
-    if(responsiblePlayer)
-        sGuildTaskMgr.CheckKillTask(responsiblePlayer, victim);
-#endif
 
     // Notify the outdoor pvp script
     if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(responsiblePlayer ? responsiblePlayer->GetCachedZoneId() : victim->GetZoneId()))
