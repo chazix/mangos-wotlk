@@ -158,6 +158,7 @@ class ChatHandler
         char* ExtractKeyFromLink(char** text, char const* linkType, char** something1 = nullptr);
         static char* ExtractKeyFromLink(char** text, char const* const* linkTypes, int* found_idx = nullptr, char** something1 = nullptr);
         bool  ExtractUint32KeyFromLink(char** text, char const* linkType, uint32& value);
+        bool  ExtractUint32KeysFromLink(char** text, char const* linkType1, char const* linkType2, uint32& value1, uint32& value2);
 
         uint32 ExtractAccountId(char** args, std::string* accountName = nullptr, Player** targetIfNullArg = nullptr);
         uint32 ExtractSpellIdFromLink(char** text);
@@ -381,6 +382,7 @@ class ChatHandler
         bool HandleGoXYCommand(char* args);
         bool HandleGoXYZCommand(char* args);
         bool HandleGoZoneXYCommand(char* args);
+        bool HandleGoNextCommand(char* args);
 
         bool HandleGuildCreateCommand(char* args);
         bool HandleGuildInviteCommand(char* args);

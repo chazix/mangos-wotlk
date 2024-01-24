@@ -518,6 +518,7 @@ Spell::Spell(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags,
     m_duration = 0;
     m_maxRange = 0.f;
     m_guaranteedCrit = false;
+    m_usableWhileStunned = m_spellInfo->HasAttribute(SPELL_ATTR_EX5_ALLOW_WHILE_STUNNED);
 
     m_needAliveTargetMask = 0;
 
@@ -4840,7 +4841,7 @@ void Spell::WriteSpellGoTargets(WorldPacket& data)
         }
         else
         {
-            if (IsChanneledSpell(m_spellInfo) && (ihit.missCondition == SPELL_MISS_RESIST || ihit.missCondition == SPELL_MISS_REFLECT))
+            if (IsChanneledSpell(m_spellInfo) && (ihit.missCondition == SPELL_MISS_RESIST || ihit.missCondition == SPELL_MISS_REFLECT) && ihit.targetGUID == m_targets.getUnitTargetGuid())
             {
                 m_duration = 0;                              // cancel aura to avoid visual effect continue
                 ihit.effectDuration = 0;
@@ -7219,14 +7220,7 @@ SpellCastResult Spell::CheckCasterAuras(uint32& param1) const
         return SPELL_CAST_OK;
 
     // these attributes only show the spell as usable on the client when it has related aura applied
-     // still they need to be checked against certain mechanics
-
-     // SPELL_ATTR5_USABLE_WHILE_STUNNED by default only MECHANIC_STUN (ie no sleep, knockout, freeze, etc.)
-    bool usableWhileStunned = m_spellInfo->HasAttribute(SPELL_ATTR_EX5_ALLOW_WHILE_STUNNED);
-
-    // Pain Suppression (have SPELL_ATTR_EX5_USABLE_WHILE_STUNNED that must be used only with glyph)
-    if (m_spellInfo->Id == 33206 && !m_caster->HasAura(63248))
-        usableWhileStunned = false;
+    // still they need to be checked against certain mechanics
 
     // SPELL_ATTR5_USABLE_WHILE_FEARED by default only fear (ie no horror)
     bool usableWhileFeared = m_spellInfo->HasAttribute(SPELL_ATTR_EX5_ALLOW_WHILE_FLEEING);
@@ -7287,7 +7281,7 @@ SpellCastResult Spell::CheckCasterAuras(uint32& param1) const
         return SPELL_CAST_OK;
     };
 
-    if (unitflag & UNIT_FLAG_STUNNED && !usableWhileStunned && !CheckSpellCancelsStun(param1))
+    if (unitflag & UNIT_FLAG_STUNNED && !m_usableWhileStunned && !CheckSpellCancelsStun(param1))
         result = SPELL_FAILED_STUNNED;
     else if (unitflag & UNIT_FLAG_SILENCED && m_spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE && !CheckSpellCancelsSilence(param1))
         result = SPELL_FAILED_SILENCED;
@@ -7636,12 +7630,11 @@ SpellCastResult Spell::CheckPower(bool strict)
         return SPELL_CAST_OK;
 
     // Do precise power regen on spell cast
-    if (m_powerCost > 0 && m_caster->GetTypeId() == TYPEID_PLAYER)
+    if (m_powerCost > 0 && m_caster->IsPlayer())
     {
-        Player* playerCaster = (Player*)m_caster;
+        Player* playerCaster = static_cast<Player*>(m_caster);
         uint32 diff = m_caster->GetRegenTimer();
-        if (diff >= REGEN_TIME_PRECISE)
-            playerCaster->RegenerateAll(diff);
+        playerCaster->RegenerateAll(diff);
     }
 
     m_powerCost = CalculatePowerCost(m_spellInfo, m_caster, this, m_CastItem, !strict);

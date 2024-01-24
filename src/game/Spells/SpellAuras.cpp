@@ -509,6 +509,13 @@ AreaAura::~AreaAura()
 {
 }
 
+bool AreaAura::OnAreaAuraCheckTarget(Unit* target) const
+{
+    if (AuraScript* script = GetAuraScript())
+        return script->OnAreaAuraCheckTarget(this, target);
+    return true;
+}
+
 PersistentAreaAura::PersistentAreaAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target,
                                        Unit* caster, Item* castItem) : Aura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem)
 {
@@ -691,6 +698,9 @@ void AreaAura::Update(uint32 diff)
 
             for (auto& target : targets)
             {
+                if (!OnAreaAuraCheckTarget(target))
+                    continue;
+
                 // flag for selection is need apply aura to current iteration target
                 bool apply = true;
 
@@ -2335,13 +2345,11 @@ void Aura::TriggerSpellWithValue()
     // damage triggered from spell might not only be processed by first effect (but always EffectDieSides equal 1)
     if (triggeredSpellInfo)
     {
-        uint8 j = 0;
         for (uint8 i = 0; i < 3; ++i)
         {
             if (triggeredSpellInfo->EffectDieSides[i] == 1)
-                j = i;
+                basePoints[i] = calculatedAmount;
         }
-        basePoints[j] = calculatedAmount;
     }
     Unit* triggerCaster = triggerTarget;
     WorldObject* triggerTargetObject = nullptr;
@@ -5751,15 +5759,6 @@ void Aura::HandleAuraProcTriggerSpell(bool apply, bool Real)
             if (!apply)
                 GetTarget()->RemoveAurasDueToSpell(40601);
             break;
-        case 50720:                                         // Vigilance (threat transfering)
-            if (apply)
-            {
-                if (Unit* caster = GetCaster())
-                    target->CastSpell(caster, 59665, TRIGGERED_OLD_TRIGGERED);
-            }
-            else
-                target->getHostileRefManager().ResetThreatRedirection(59665);
-            break;
         default:
             break;
     }
@@ -6156,15 +6155,6 @@ void Aura::HandleDamagePercentTaken(bool apply, bool Real)
     {
         if (loading)
             return;
-
-        // Hand of Salvation (only it have this aura and mask)
-        if (GetSpellProto()->IsFitToFamily(SPELLFAMILY_PALADIN, uint64(0x0000000000000100)))
-        {
-            // Glyph of Salvation
-            if (target->GetObjectGuid() == GetCasterGuid())
-                if (Aura* aur = target->GetAura(63225, EFFECT_INDEX_0))
-                    m_modifier.m_amount -= aur->GetModifier()->m_amount;
-        }
     }
     else
         if (GetSpellProto()->Id == 43421) // Malacrass - Lifebloom
@@ -7083,13 +7073,15 @@ void Aura::HandleModHitChance(bool apply, bool /*Real*/)
 
     if (target->GetTypeId() == TYPEID_PLAYER)
     {
-        ((Player*)target)->UpdateMeleeHitChances();
-        ((Player*)target)->UpdateRangedHitChances();
+        static_cast<Player*>(target)->UpdateWeaponHitChances(BASE_ATTACK);
+        static_cast<Player*>(target)->UpdateWeaponHitChances(OFF_ATTACK);
+        static_cast<Player*>(target)->UpdateWeaponHitChances(RANGED_ATTACK);
     }
     else
     {
-        target->m_modMeleeHitChance += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
-        target->m_modRangedHitChance += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
+        target->m_modWeaponHitChance[BASE_ATTACK] += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
+        target->m_modWeaponHitChance[OFF_ATTACK] += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
+        target->m_modWeaponHitChance[RANGED_ATTACK] += (apply ? m_modifier.m_amount : -m_modifier.m_amount);
     }
 }
 
@@ -9002,15 +8994,6 @@ void Aura::PeriodicDummyTick()
                     target->CastSpell(target, 62593, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
-                case 62717:                                 // Slag Pot
-                {
-                    target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 65722 : 65723, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-
-                    // cast Slag Imbued if the target survives up to the last tick
-                    if (GetAuraTicks() == 10)
-                        target->CastSpell(target, 63536, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
                 case 63050:                                 // Sanity
                 {
                     if (GetHolder()->GetStackAmount() <= 25 && !target->HasAura(63752))
@@ -10494,43 +10477,10 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 else
                     return;
             }
-            // Shadowflame (DoT)
-            else if (m_spellProto->IsFitToFamilyMask(uint64(0x0000000000000000), 0x00000002))
-            {
-                // Glyph of Shadowflame
-                if (!apply)
-                    boostSpells.push_back(63311);
-                else
-                {
-                    Unit* caster = GetCaster();
-                    if (caster && caster->HasAura(63310))
-                        boostSpells.push_back(63311);
-                    else
-                        return;
-                }
-            }
-            else
-                return;
             break;
         }
         case SPELLFAMILY_PRIEST:
         {
-            // Power Word: Shield
-            if (apply && m_spellProto->SpellFamilyFlags & uint64(0x0000000000000001) && m_spellProto->Mechanic == MECHANIC_SHIELD)
-            {
-                Unit* caster = GetCaster();
-                if (!caster)
-                    return;
-
-                // Glyph of Power Word: Shield
-                if (Aura* glyph = caster->GetAura(55672, EFFECT_INDEX_0))
-                {
-                    Aura* shield = GetAuraByEffectIndex(EFFECT_INDEX_0);
-                    int32 heal = (glyph->GetModifier()->m_amount * shield->GetModifier()->m_amount) / 100;
-                    caster->CastCustomSpell(m_target, 56160, &heal, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, shield);
-                }
-                return;
-            }
             switch (GetId())
             {
                 // Abolish Disease (remove 1 more poison effect with Body and Soul)
@@ -10581,17 +10531,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
             break;
         }
         case SPELLFAMILY_ROGUE:
-            // Sprint (skip non player casted spells by category)
-            if (GetSpellProto()->SpellFamilyFlags & uint64(0x0000000000000040) && GetSpellProto()->Category == 44)
-            {
-                if (!apply || m_target->HasAura(58039))     // Glyph of Blurred Speed
-                    boostSpells.push_back(61922);                       // Sprint (waterwalk)
-                else
-                    return;
-            }
-            else
-                return;
-            break;
+            return;
         case SPELLFAMILY_HUNTER:
         {
             switch (GetId())
