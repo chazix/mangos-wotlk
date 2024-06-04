@@ -48,11 +48,21 @@ class RefManager : public LinkedListHead
 
         void clearReferences()
         {
-            LinkedListElement* ref;
-            while ((ref = getFirst()) != nullptr)
+            if (getAuthoritativeSize() == 0)
+                return;
+
+            LinkedListElement* elem;
+            while ((elem = getFirst()) != nullptr)
             {
-                ((Reference<TO, FROM>*) ref)->invalidate();
-                ref->delink();                              // the delink might be already done by invalidate(), but doing it here again does not hurt and insures an empty list
+                Reference<TO, FROM>* ref = static_cast<Reference<TO, FROM>*>(elem);
+                if (ref)
+                {
+                    ref->invalidate();
+                    if (elem) // Check if invalidate() deleted the object
+                    {
+                        elem->delink();
+                    }
+                }
             }
         }
 };
